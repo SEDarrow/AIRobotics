@@ -7,7 +7,7 @@ import math
 import random
 from naoqi import ALProxy
 
-IP = "192.168.1.2"
+IP = "192.168.1.153"
 PORT = 9559
 RED_THRESHOLD = .5
 SENSITIVITY = .5
@@ -109,6 +109,7 @@ def getBoxPosition(IP, PORT):
 # Make Nao's head follow a red box
 if __name__ == '__main__':
   # Setup for motion
+  
   motionProxy = ALProxy("ALMotion", IP, PORT)
   postureProxy = ALProxy("ALRobotPosture", IP, 9559)
   motionProxy.stiffnessInterpolation("Body", 1.0, 1.0)
@@ -120,26 +121,10 @@ if __name__ == '__main__':
   postureProxy.goToPosture("StandInit", 0.5)
   motionProxy.setWalkArmsEnabled(True, True)
   motionProxy.setMotionConfig([["ENABLE_FOOT_CONTACT_PROTECTION", True]])
-  X = 0.3 
-  Y = 0.0
-  Theta = 0.0
-  Frequency =0.0 # low speed
-  motionProxy.setWalkTargetVelocity(X, Y, Theta, Frequency)
-  
-  JointNames = ["LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll"]
-  Arm1 = [-40,  25, 0, -40]
-  Arm1 = [ x * motion.TO_RAD for x in Arm1]
-  
-  Arm2 = [-40,  50, 0, -80]
-  Arm2 = [ x * motion.TO_RAD for x in Arm2]
-  
-  pFractionMaxSpeed = 0.6
-  
-  motionProxy.angleInterpolationWithSpeed(JointNames, Arm1, pFractionMaxSpeed)
-  motionProxy.angleInterpolationWithSpeed(JointNames, Arm2, pFractionMaxSpeed)
-  motionProxy.angleInterpolationWithSpeed(JointNames, Arm1, pFractionMaxSpeed)  
+  #motionProxy.setWalkTargetVelocity(X, Y, Theta, Frequency)
       
-  while (True):
+  size = 0
+  while (size < 260):
     X = 0.3  
     size, center = getBoxPosition(IP, PORT)
     print(size)
@@ -158,13 +143,27 @@ if __name__ == '__main__':
       pitch = .5
     elif (pitch < -.5):
       pitch = -.5
-
     
     # Move head    
     motionProxy.setAngles("HeadYaw", yaw, 0.1)
     motionProxy.setAngles("HeadPitch", pitch, 0.1)  
     
-    if (size > 160):
-      motionProxy.setWalkTargetVelocity(0, Y, 0, Frequency) 
+    if (size > 190):
+      motionProxy.moveToward(0, 0, 0) 
     else:
-      motionProxy.setWalkTargetVelocity(X, Y, yaw/3, Frequency) 
+      theta = 0
+      x= 0
+      if (yaw > .5):
+          theta = .3
+          x = 0
+      elif (yaw < -.5):
+          theta = -.3
+          x = 0
+      else:
+          theta = 0
+          x=.5
+      
+      motionProxy.moveToward(x, 0, theta) 
+   
+  motionProxy.moveToward(0, 0, 0)   
+  print("done!")
