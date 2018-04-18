@@ -1,5 +1,6 @@
 from __future__ import print_function
 import sys
+import motion
 import time
 import Image
 import math
@@ -73,7 +74,10 @@ def findClusterCenter(cluster, height, width):
     xTotal += cell[0]
     yTotal += cell[1]
       
-  center = (yTotal / float(len(cluster)) / float(width), xTotal / float(len(cluster)) / float(height))  
+  try:
+    center = (yTotal / float(len(cluster)) / float(width), xTotal / float(len(cluster)) / float(height)) 
+  except:
+    center = (.5, .5)
   return center
       
 # Returns the size and position of the largest red item it sees
@@ -106,13 +110,39 @@ def getBoxPosition(IP, PORT):
 if __name__ == '__main__':
   # Setup for motion
   motionProxy = ALProxy("ALMotion", IP, PORT)
+  postureProxy = ALProxy("ALRobotPosture", IP, 9559)
   motionProxy.stiffnessInterpolation("Body", 1.0, 1.0)
   
   yaw = 0
   pitch = 0
   motionProxy.setAngles("HeadYaw", 0, 0.1)
+  
+  postureProxy.goToPosture("StandInit", 0.5)
+  motionProxy.setWalkArmsEnabled(True, True)
+  motionProxy.setMotionConfig([["ENABLE_FOOT_CONTACT_PROTECTION", True]])
+  X = 0.3 
+  Y = 0.0
+  Theta = 0.0
+  Frequency =0.0 # low speed
+  motionProxy.setWalkTargetVelocity(X, Y, Theta, Frequency)
+  
+  JointNames = ["LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll"]
+  Arm1 = [-40,  25, 0, -40]
+  Arm1 = [ x * motion.TO_RAD for x in Arm1]
+  
+  Arm2 = [-40,  50, 0, -80]
+  Arm2 = [ x * motion.TO_RAD for x in Arm2]
+  
+  pFractionMaxSpeed = 0.6
+  
+  motionProxy.angleInterpolationWithSpeed(JointNames, Arm1, pFractionMaxSpeed)
+  motionProxy.angleInterpolationWithSpeed(JointNames, Arm2, pFractionMaxSpeed)
+  motionProxy.angleInterpolationWithSpeed(JointNames, Arm1, pFractionMaxSpeed)  
+      
   while (True):
+    X = 0.3  
     size, center = getBoxPosition(IP, PORT)
+    print(size)
     
     # Calculate new angle to look at 
     yaw -= (center[0] - .5) * SENSITIVITY
@@ -128,7 +158,13 @@ if __name__ == '__main__':
       pitch = .5
     elif (pitch < -.5):
       pitch = -.5
+
     
     # Move head    
     motionProxy.setAngles("HeadYaw", yaw, 0.1)
     motionProxy.setAngles("HeadPitch", pitch, 0.1)  
+    
+    if (size > 160):
+      motionProxy.setWalkTargetVelocity(0, Y, 0, Frequency) 
+    else:
+      motionProxy.setWalkTargetVelocity(X, Y, yaw/3, Frequency) 
