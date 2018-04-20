@@ -39,6 +39,7 @@ def main(IP, PORT, ballSize):
     print "Use Ctrl+c to stop this script."
 
     tracking = True
+    stopped = False
     try:
         while True:
             time.sleep(1)
@@ -50,6 +51,12 @@ def main(IP, PORT, ballSize):
             elif size < 200 and not tracking:
                 tracker.track(targetName)
                 tracking = True
+                
+            if size < 20 and not stopped:
+                motion.moveToward(0, 0, .3)
+            if size > 20 and stopped:
+                motion.moveToward(0, 0, 0)
+                
                 
             
     except KeyboardInterrupt:
