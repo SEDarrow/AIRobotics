@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ChoregrapheProject xmlns="http://www.aldebaran-robotics.com/schema/choregraphe/project.xsd" xar_version="3">
+    <Box name="root" id="-1" localization="8" tooltip="Root box of Choregraphe&apos;s behavior. Highest level possible." x="0" y="0">
+        <bitmap>media/images/box/root.png</bitmap>
+        <script language="4">
+            <content>
+                <![CDATA[]]>
+</content>
+        </script>
+        <Input name="onLoad" type="1" type_size="1" nature="0" inner="1" tooltip="Signal sent when diagram is loaded." id="1" />
+        <Input name="onStart" type="1" type_size="1" nature="2" inner="0" tooltip="Box behavior starts when a signal is received on this input." id="2" />
+        <Input name="onStop" type="1" type_size="1" nature="3" inner="0" tooltip="Box behavior stops when a signal is received on this input." id="3" />
+        <Output name="onStopped" type="1" type_size="1" nature="1" inner="0" tooltip="Signal sent when box behavior is finished." id="4" />
+        <Timeline enable="0">
+            <BehaviorLayer name="behavior_layer1">
+                <BehaviorKeyframe name="keyframe1" index="1">
+                    <Diagram>
+                        <Box name="WakeUp" id="2" localization="0" tooltip="Call a Wake Up process.&#x0A;Stiff all joints and apply stand Init posture if the robot is Stand" x="163" y="25">
+                            <bitmap>media/images/box/movement/stiffness.png</bitmap>
+                            <script language="4">
+                                <content>
+                                    <![CDATA[class MyClass(GeneratedClass):
+    def __init__(self):
+        GeneratedClass.__init__(self)
+        pass
+
+    def onLoad(self):
+        self.motion = ALProxy("ALMotion")
+        pass
+
+    def onUnload(self):
+        pass
+
+    def onInput_onStart(self):
+        self.motion.wakeUp()
+        self.onStopped() #~ activate output of the box
+        pass
+
+    def onInput_onStop(self):
+        self.onUnload() #~ it is recommended to call onUnload of this box in a onStop method, as the code written in onUnload is used to stop the box as well
+        pass]]>
+</content>
+                            </script>
+                            <Input name="onLoad" type="1" type_size="1" nature="0" inner="1" tooltip="Signal sent when diagram is loaded." id="1" />
+                            <Input name="onStart" type="1" type_size="1" nature="2" inner="0" tooltip="Box behavior starts when a signal is received on this input." id="2" />
+                            <Input name="onStop" type="1" type_size="1" nature="3" inner="0" tooltip="Box behavior stops when a signal is received on this input." id="3" />
+                            <Output name="onStopped" type="1" type_size="1" nature="1" inner="0" tooltip="Signal sent when box behavior is finished." id="4" />
+                            <Resource name="All motors" type="Lock" timeout="0" />
+                            <Resource name="Stiffness" type="Lock" timeout="0" />
+                        </Box>
+                        <Box name="Move Toward" id="1" localization="8" tooltip="Make the robot move in the direction you set in parameters.&#x0A;&#x0A;!!Warning!! the robot will not stop moving by himself. You need to either set x, y and theta to 0 or stop the box to stop him.&#x0A;&#x0A;Note: You can set the period of move direction update in parameters." x="321" y="29">
+                            <bitmap>media/images/box/movement/walk_forward.png</bitmap>
+                            <script language="4">
+                                <content>
+                                    <![CDATA[from __future__ import print_function
+import sys
+import motion
+import time
+import Image
+import math
+import random
+from naoqi import ALProxy
+
+IP = "192.168.1.153"
+PORT = 9559
+RED_THRESHOLD = .5
+SENSITIVITY = .5
+
+def filterImageForRedCells(image, imageWidth):
+    red = []
+    row = 0
+    col = 0
+    for cell in image:
+        if (cell[0] + cell[1] + cell[2]) > 0:
+            if (float(cell[0]) / float(cell[0] + cell[1] + cell[2]) > RED_THRESHOLD):
+                red.append((row, col))
+
+        col += 1
+        if col >= imageWidth:
+            row += 1
+            col = 0
+    return red
+
+def clusterCells(cellCoordinates):
+    adjacency = []
+    for cell in cellCoordinates:
+        found = False
+
+        # check surrounding coordinates to see if they
+        # are also in the list (so they are the same color)
+        for xChange in range(-1, 2):
+            if found:
+                continue
+            for yChange in range(-1, 2):
+                if found:
+                    continue
+                x = cell[0] + xChange
+                y = cell[1] + yChange
+
+                for cluster in adjacency:
+                    if found:
+                        continue
+                    for clusterCell in cluster:
+                        # if a neighboring cell is already in a cluster,
+                        # add the new cell to that cluster
+                        if x == clusterCell[0] and y == clusterCell[1]:
+                            found = True
+                            cluster.append(cell)
+                            continue
+        # if a cell is not in another cluster, start it's own cluster
+        if not found:
+            adjacency.append([cell])
+    return adjacency
+
+def findLargestCluster(clusters):
+    maxLength = 0
+    maxCluster = []
+    for cluster in clusters:
+        if len(cluster) > maxLength:
+            maxLength = len(cluster)
+            maxCluster = cluster
+    return maxCluster
+
+def findClusterCenter(cluster, height, width):
+    xTotal = 0
+    yTotal = 0
+    for cell in cluster:
+        xTotal += cell[0]
+        yTotal += cell[1]
+
+    try:
+        center = (yTotal / float(len(cluster)) / float(width), xTotal / float(len(cluster)) / float(height))
+    except:
+        center = (.5, .5)
+    return center
+
+# Returns the size and position of the largest red item it sees
+# Returns it in the form (size, position[x, y])
+def getBoxPosition(IP, PORT):
+    camProxy = ALProxy("ALVideoDevice", IP, PORT)
+    resolution = 8 # 30 x 40 pixels
+    colorSpace = 11  # RGB
+
+    # Take a picture
+    videoClient = camProxy.subscribe("python_client", resolution, colorSpace, 5)
+    naoImage = camProxy.getImageRemote(videoClient)
+
+    camProxy.unsubscribe(videoClient)
+    imageWidth = naoImage[0]
+    imageHeight = naoImage[1]
+    array = naoImage[6]
+    im = Image.fromstring("RGB", (imageWidth, imageHeight), array)
+    im = list(im.getdata())
+
+    red = filterImageForRedCells(im, imageWidth)
+    clusters = clusterCells(red)
+    maxCluster = findLargestCluster(clusters)
+
+    center = findClusterCenter(maxCluster, imageWidth, imageHeight)
+    size = len(maxCluster)
+    return (size, center)
+
+class MyClass(GeneratedClass):
+
+
+    def __init__(self):
+        GeneratedClass.__init__(self, False)
+
+    def onLoad(self):
+        import threading
+        self.motion = ALProxy("ALMotion")
+        self.x = 0
+        self.y = 0
+        self.theta = 0
+        self.pitch = 0
+        self.yaw = 0
+        self.ptask = qi.PeriodicTask()
+        self.lock = threading.RLock()
+
+    def onUnload(self):
+        with self.lock:
+            self.ptask.stop()
+            self.x = 0
+            self.y = 0
+            self.theta = 0
+            self.motion.moveToward(0, 0, 0)
+            self.motion.waitUntilMoveIsFinished()
+
+    def onInput_onStop(self):
+        with self.lock:
+            self.onUnload()
+            self.onStopped()
+
+    def onInput_onStart(self):
+        with self.lock:
+            period = self.getParameter("Period of direction update (s)")
+            us_period = int(period*1000000)
+            self.ptask.compensateCallbackTime(True)
+            self.ptask.setCallback(self.updateMovement)
+            self.ptask.setUsPeriod(us_period)
+            self.ptask.start(True)
+
+    def moveFailed(self):
+        self.onUnload()
+        self.onMoveFailed()
+
+    def updateMovement(self):
+        import math
+        size, center = getBoxPosition(IP, PORT)
+
+        # Calculate new angle to look at
+        self.yaw -= (center[0] - .5) * SENSITIVITY
+        self.pitch += (center[1] - .5) * SENSITIVITY
+
+        # Make sure values are valid
+        if (self.yaw > 1):
+            self.yaw = 1
+        elif (self.yaw < -1):
+            self.yaw = -1
+
+        if (self.pitch > .5):
+            self.pitch = .5
+        elif (self.pitch < -.5):
+            self.pitch = -.5
+
+        x = 0
+        y = 0
+        z = 0
+        print(size)
+        if (size > 190):
+            x = 0
+            theta = 0
+        elif (self.yaw > .5):
+            x = 0
+            theta = .3
+        elif (self.yaw < -.5):
+            x = 0
+            theta = -.3
+        else:
+            x = .3
+            theta = 0
+
+        with self.lock:
+            enableArms = self.getParameter("Arms movement enabled")
+            self.motion.setMoveArmsEnabled(enableArms, enableArms)
+
+            period = self.getParameter("Period of direction update (s)")
+            epsilon = 0.0001
+            dx = math.fabs(x - self.x)
+            dy = math.fabs(y - self.y)
+            dt = math.fabs(theta - self.theta)
+
+            # Update moveToward parameters
+            if(dx > epsilon or dy > epsilon or dt > epsilon):
+                self.x=x
+                self.y=y
+                self.theta=theta
+                self.motion.moveToward(self.x, self.y, self.theta)
+
+            self.motion.setAngles("HeadYaw", self.yaw, 0.1)
+            self.motion.setAngles("HeadPitch", self.pitch, 0.1)
+
+            us_period = int(period*1000000)
+            self.ptask.setUsPeriod(us_period)]]>
+</content>
+                            </script>
+                            <Input name="onLoad" type="1" type_size="1" nature="0" inner="1" tooltip="Signal sent when Diagram is loaded." id="1" />
+                            <Input name="onStart" type="1" type_size="1" nature="2" inner="0" tooltip="Box behavior starts when a signal is received on this input." id="2" />
+                            <Input name="onStop" type="1" type_size="1" nature="3" inner="0" tooltip="Box behavior stops when a signal is received on this input." id="3" />
+                            <Output name="onStopped" type="1" type_size="1" nature="1" inner="0" tooltip="Signal sent when the box behavior is stopped." id="4" />
+                            <Output name="onMoveFailed" type="1" type_size="1" nature="1" inner="0" tooltip="Signal sent when the motion move task is canceled." id="5" />
+                            <Parameter name="X" inherits_from_parent="0" content_type="2" value="0.2" default_value="0.2" min="-1" max="1" tooltip="The distance in meters for forward/backward motion. Positive value&#x0A;means forward, negative value means backward." id="6" />
+                            <Parameter name="Y" inherits_from_parent="0" content_type="2" value="0" default_value="0" min="-1" max="1" tooltip="The distance in meters for lateral motion. Positive value means left, negative&#x0A;value means right." id="7" />
+                            <Parameter name="Theta" inherits_from_parent="0" content_type="2" value="0" default_value="0" min="-1" max="1" tooltip="The orientation in radians for final rotation. Positive value means anticlockwise,&#x0A;negative value means clockwise." id="8" />
+                            <Parameter name="Period of direction update (s)" inherits_from_parent="0" content_type="2" value="0.1" default_value="0.1" min="0" max="1" tooltip="" id="9" />
+                            <Parameter name="Arms movement enabled" inherits_from_parent="0" content_type="0" value="1" default_value="1" tooltip="Enables natural motion of the arms." id="10" />
+                            <Resource name="Legs" type="Lock" timeout="0" />
+                        </Box>
+                        <Link inputowner="0" indexofinput="4" outputowner="1" indexofoutput="4" />
+                        <Link inputowner="1" indexofinput="2" outputowner="2" indexofoutput="4" />
+                        <Link inputowner="2" indexofinput="2" outputowner="0" indexofoutput="2" />
+                    </Diagram>
+                </BehaviorKeyframe>
+            </BehaviorLayer>
+        </Timeline>
+    </Box>
+</ChoregrapheProject>
