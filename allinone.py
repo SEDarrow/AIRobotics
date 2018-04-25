@@ -1,7 +1,5 @@
-# -*- encoding: UTF-8 -*-
-
 """
-This example shows how to use ALTracker with red ball.
+This example shows how to use ALTracker with red objects and faces.
 """
 
 import time
@@ -10,10 +8,25 @@ from naoqi import ALProxy
 
 IP = "192.168.1.2"
 PORT = 9559
-targetName = "RedBall" #RedBall or Face. Face sometimes thinks it reached the target as soon as it starts
-targetDistanceThreshold = 0.15 #0.15 for RedBall, 1.0 for Face? Could be tweaked
 
-def main(IP, PORT, ballSize, faceSize):
+# Variables, values could be tweaked
+targetName = "RedBall" #RedBall or Face.
+
+# Set targetSize according to target type
+if (targetName == "RedBall"):
+    targetSize = 0.06   # Diameter of ball. Default value 0.06.
+elif (targetName == "Face"):
+    targetSize = 0.2    # Width of face. Default value 0.1.
+else:
+    raise NameError('Invalid Target Name')
+
+# Set targetDistanceThreshold according to target type
+if (targetName == "RedBall"):
+    targetDistanceThreshold = 0.15 
+elif (targetName == "Face"):
+    targetDistanceThreshold = 1.0
+
+def main(IP, PORT):
     print "Connecting to", IP, "with port", PORT
     motion = ALProxy("ALMotion", IP, PORT)
     posture = ALProxy("ALRobotPosture", IP, PORT)
@@ -28,12 +41,7 @@ def main(IP, PORT, ballSize, faceSize):
     posture.goToPosture("StandInit", fractionMaxSpeed)
 
     # Add target to track
-    if (targetName == "Face"):
-        faceWidth = faceSize
-        tracker.registerTarget(targetName, faceWidth)
-    else: #RedBall
-        diameterOfBall = ballSize
-        tracker.registerTarget(targetName, diameterOfBall)
+    tracker.registerTarget(targetName, targetSize)
 
     # set mode
     mode = "Move"
@@ -41,32 +49,38 @@ def main(IP, PORT, ballSize, faceSize):
 
     # Then, start tracker.
     tracker.track(targetName)
-    if (targetName == "Face"):
-        tts.say("Tracking people!")
-    else:
+    if (targetName == "RedBall"):
         tts.say("Tracking red objects")
+    elif (targetName == "Face"):
+        tts.say("Tracking people")
 
-    print "ALTracker successfully started, now show a red ball to robot!"
+    print "ALTracker successfully started, now show a target to robot!"
     print "Use Ctrl+c to stop this script."
 
-    success = False
+    success = False # Has Nao reached the target
     try:
         while True:
             position = tracker.getTargetPosition()
-            print "Target position: ", position
+            print "Target position: ", position     # Print distance from target
 
+            # If Nao has found a target
             if position:
+                # If Nao is close enough, stop moving and exit loop
                 if (position[0] < targetDistanceThreshold and position[1] < targetDistanceThreshold):
                     mode = "Head"
                     success = True
                     break
+                # Otherwise, keep following
                 else: 
                     mode = "Move"
                 tracker.setMode(mode)
 
+                # If Nao loses the target, rotate in place
                 lost = tracker.isTargetLost()
                 if(lost == True):
                     motion.moveToward(0, 0, -.3)
+
+            # If Nao hasn't found a target yet, keep looking while rotating in place
             else:
                 tracker.track(targetName)
                 motion.moveToward(0, 0, -.3)
@@ -98,11 +112,13 @@ if __name__ == "__main__" :
                         help="Robot ip address.")
     parser.add_argument("--port", type=int, default=PORT,
                         help="Robot port number.")
+    '''
     parser.add_argument("--ballsize", type=float, default=0.06,
                         help="Diameter of ball.")
     parser.add_argument("--faceSize", type=float, default=0.2,
-                        help="Face width.")
+                        help="Face width.")'''
 
     args = parser.parse_args()
 
-    main(args.ip, args.port, args.ballsize, args.faceSize)
+    #main(args.ip, args.port, args.ballsize, args.faceSize)
+    main(args.ip, args.port)
