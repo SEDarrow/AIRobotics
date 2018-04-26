@@ -10,7 +10,7 @@ IP = "192.168.1.2"
 PORT = 9559
 
 # Variables, values could be tweaked
-targetName = "RedBall" #RedBall or Face.
+targetName = "RedBall" # RedBall or Face.
 
 # Set targetSize according to target type
 if (targetName == "RedBall"):
@@ -43,8 +43,8 @@ def main(IP, PORT):
     # Add target to track
     tracker.registerTarget(targetName, targetSize)
 
-    # set mode
-    mode = "Move"
+    # Set mode
+    mode = "Move" # Face: just track with head movements. Move: track and move towards target
     tracker.setMode(mode)
 
     # Then, start tracker.
@@ -67,7 +67,7 @@ def main(IP, PORT):
             if position:
                 # If Nao is close enough, stop moving and exit loop
                 if (position[0] < targetDistanceThreshold and position[1] < targetDistanceThreshold):
-                    mode = "Head"
+                    mode = "Head" # Stops moving, only tracks with head
                     success = True
                     break
                 # Otherwise, keep following
