@@ -8,6 +8,7 @@ from naoqi import ALProxy
 
 
 def determineState(motion, tracker, targetDistanceThreshold):
+    success = False
     position = tracker.getTargetPosition()
     print "Target position: ", position    # Print distance from target
     # If Nao has found a target
@@ -91,7 +92,7 @@ def main(IP, PORT, targetType):
     tracker.registerTarget(targetType, targetSize)
 
     # Has Nao reached the target
-    success = False
+    #success = False
 
     print "ALTracker successfully started, now show a target to robot!"
     print "Use Ctrl+c to stop this script."
@@ -123,7 +124,7 @@ def main(IP, PORT, targetType):
 
 if __name__ == "__main__":
 
-    IP = "192.168.1.2"  # 192.168.1.2, 192.168.1.153
+    IP = "192.168.1.153"  # 192.168.1.2, 192.168.1.153
     PORT = 9559
     targetType = "RedBall"  # RedBall or Face
 
